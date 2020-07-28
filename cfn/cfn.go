@@ -7,6 +7,7 @@ import (
 	"log"
 	"os"
 	"path"
+	"runtime/debug"
 	"time"
 
 	"github.com/aws-cloudformation/cloudformation-cli-go-plugin/cfn/cfnerr"
@@ -59,6 +60,7 @@ type Handler interface {
 // invocations of a custom resource and MakeTestEventFunc is the entry point that
 // allows the CLI's contract testing framework to invoke the resource's CRUDL handlers.
 func Start(h Handler) {
+	log.Println("Starting Start...")
 	defer func() {
 		if r := recover(); r != nil {
 			log.Printf("Handler panicked: %s", r)
@@ -94,31 +96,49 @@ type testEventFunc func(ctx context.Context, event *testEvent) (handler.Progress
 // handlerFunc is the signature required for all actions
 type handlerFunc func(request handler.Request) handler.ProgressEvent
 
+func logPanic() {
+	if r := recover(); r != nil {
+		log.Println(string(debug.Stack()))
+		panic(r)
+	}
+}
+
 // MakeEventFunc is the entry point to all invocations of a custom resource
 func makeEventFunc(h Handler) eventFunc {
 	return func(ctx context.Context, event *event) (response, error) {
+		log.Println("Starting makeEventFunc...")
+		defer logPanic()
 		//pls := credentials.SessionFromCredentialsProvider(&event.RequestData.PlatformCredentials)
 		ps := credentials.SessionFromCredentialsProvider(&event.RequestData.ProviderCredentials)
+		log.Println("got SessionFromCredentialsProvider")
 		l, err := logging.NewCloudWatchLogsProvider(
 			cloudwatchlogs.New(ps),
 			event.RequestData.ProviderLogGroupName,
 		)
+		log.Println("done with NewCloudWatchLogsProvider")
 		// Set default logger to output to CWL in the provider account
 		logging.SetProviderLogOutput(l)
+		log.Println("done with SetProviderLogOutput")
 		m := metrics.New(cloudwatch.New(ps), event.AWSAccountID, event.ResourceType)
+		log.Println("done with metrics.New")
 		re := newReportErr(m)
+		log.Println("done with newReportErr")
 		if err := scrubFiles("/tmp"); err != nil {
 			log.Printf("Error: %v", err)
 			m.PublishExceptionMetric(time.Now(), event.Action, err)
 		}
+		log.Println("done with scrubFiles")
 		handlerFn, err := router(event.Action, h)
+		log.Println("done with router")
 		log.Printf("Handler received the %s action", event.Action)
 		if err != nil {
 			return re.report(event, "router error", err, serviceInternalError)
 		}
+		log.Println("done with report")
 		if err := validateEvent(event); err != nil {
 			return re.report(event, "validation error", err, invalidRequestError)
 		}
+		log.Println("done with validateEvent")
 		request := handler.NewRequest(
 			event.RequestData.LogicalResourceID,
 			event.CallbackContext,
@@ -127,7 +147,9 @@ func makeEventFunc(h Handler) eventFunc {
 			event.RequestData.ResourceProperties,
 		)
 		p := invoke(handlerFn, request, m, event.Action)
+		log.Println("done with invoke")
 		r, err := newResponse(&p, event.BearerToken)
+		log.Println("done with newResponse")
 		if err != nil {
 			log.Printf("Error creating response: %v", err)
 			return re.report(event, "Response error", err, unmarshalingError)
