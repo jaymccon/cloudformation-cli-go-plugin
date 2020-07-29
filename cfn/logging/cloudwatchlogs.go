@@ -86,7 +86,6 @@ type cloudWatchLogsProvider struct {
 }
 
 func (p *cloudWatchLogsProvider) Write(b []byte) (int, error) {
-	p.logger.Printf("Need to write: %v", string(b))
 
 	input := &cloudwatchlogs.PutLogEventsInput{
 		LogGroupName:  aws.String(p.logGroupName),
