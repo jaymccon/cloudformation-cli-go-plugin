@@ -12,12 +12,10 @@ import (
 	"github.com/aws-cloudformation/cloudformation-cli-go-plugin/cfn/cfnerr"
 	"github.com/aws-cloudformation/cloudformation-cli-go-plugin/cfn/credentials"
 	"github.com/aws-cloudformation/cloudformation-cli-go-plugin/cfn/handler"
-	"github.com/aws-cloudformation/cloudformation-cli-go-plugin/cfn/logging"
 	"github.com/aws-cloudformation/cloudformation-cli-go-plugin/cfn/metrics"
 
 	"github.com/aws/aws-lambda-go/lambda"
 	"github.com/aws/aws-sdk-go/service/cloudwatch"
-	"github.com/aws/aws-sdk-go/service/cloudwatchlogs"
 )
 
 const (
@@ -99,12 +97,13 @@ func makeEventFunc(h Handler) eventFunc {
 	return func(ctx context.Context, event *event) (response, error) {
 		//pls := credentials.SessionFromCredentialsProvider(&event.RequestData.PlatformCredentials)
 		ps := credentials.SessionFromCredentialsProvider(&event.RequestData.ProviderCredentials)
-		l, err := logging.NewCloudWatchLogsProvider(
-			cloudwatchlogs.New(ps),
-			event.RequestData.ProviderLogGroupName,
-		)
+		// disable as workaround for intermittent Internal Failure
+		//l, err := logging.NewCloudWatchLogsProvider(
+		//	cloudwatchlogs.New(ps),
+		//	event.RequestData.ProviderLogGroupName,
+		//)
 		// Set default logger to output to CWL in the provider account
-		logging.SetProviderLogOutput(l)
+		// logging.SetProviderLogOutput(l)
 		m := metrics.New(cloudwatch.New(ps), event.ResourceType)
 		re := newReportErr(m)
 		if err := scrubFiles("/tmp"); err != nil {
